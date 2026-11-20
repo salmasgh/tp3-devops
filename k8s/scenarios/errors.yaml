@@ -1,0 +1,8 @@
+# Partie 3 - Errors : 10 % de réponses HTTP 500 sur pricing-engine.
+spec:
+  template:
+    spec:
+      containers:
+        - name: pricing-engine
+          env:
+            - {name: ERROR_RATE, value: "0.10"}

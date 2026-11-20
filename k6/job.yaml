@@ -1,0 +1,27 @@
+# Job k6 (les champs __X__ sont remplacés par scripts/run-k6.sh).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-__NAME__
+  namespace: loadtest
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:1.3.0
+          args: ["run", "--quiet", "--log-output=none", "/scripts/order-load.js"]
+          env:
+            - {name: PROFILE, value: "__PROFILE__"}
+            - {name: RATE, value: "__RATE__"}
+            - {name: DURATION, value: "__DURATION__"}
+          resources:
+            requests: {cpu: 500m, memory: 256Mi}
+            limits: {cpu: "2", memory: 1Gi}
+          volumeMounts:
+            - {name: script, mountPath: /scripts}
+      volumes:
+        - name: script
+          configMap: {name: k6-script}

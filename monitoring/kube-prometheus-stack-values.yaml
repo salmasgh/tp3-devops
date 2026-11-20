@@ -1,0 +1,40 @@
+# kube-prometheus-stack en configuration minimale pour le TP3.
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+defaultRules:
+  create: false
+kubeEtcd: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    scrapeInterval: 5s
+    evaluationInterval: 5s
+    retention: 2d
+    # Prendre en compte tous les ServiceMonitor du cluster (dont celui de Beyla).
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+
+grafana:
+  adminPassword: admin
+  service:
+    type: NodePort
+    nodePort: 30300
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL

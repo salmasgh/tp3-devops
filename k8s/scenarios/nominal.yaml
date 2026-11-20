@@ -1,0 +1,13 @@
+# Régime nominal : 10 ms de latence, aucune erreur, limite CPU large.
+spec:
+  template:
+    spec:
+      containers:
+        - name: pricing-engine
+          env:
+            - {name: BASE_LATENCY_MS, value: "10"}
+            - {name: SLOW_RATIO, value: "0"}
+            - {name: ERROR_RATE, value: "0"}
+            - {name: CPU_WORK, value: "0"}
+          resources:
+            limits: {cpu: "1", memory: 128Mi}

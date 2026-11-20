@@ -1,0 +1,15 @@
+# Partie 4 - Scénario 2 : coût CPU fixe par requête (60 000 itérations de
+# calcul, ~1 ms de CPU avec le runtime Go et la pile HTTP) et limite CPU
+# du conteneur à 100m. Capacité : 100 ms de CPU par seconde / ~1 ms = ~100 req/s.
+spec:
+  template:
+    spec:
+      containers:
+        - name: pricing-engine
+          env:
+            - {name: BASE_LATENCY_MS, value: "5"}
+            - {name: SLOW_RATIO, value: "0"}
+            - {name: ERROR_RATE, value: "0"}
+            - {name: CPU_WORK, value: "60000"}
+          resources:
+            limits: {cpu: 100m, memory: 128Mi}

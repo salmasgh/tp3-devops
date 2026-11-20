@@ -1,0 +1,144 @@
+# Grafana Beyla (OpenTelemetry eBPF Instrumentation) en DaemonSet.
+# Un pod par noeud attache ses sondes eBPF (kprobes sur les sockets,
+# uprobes sur net/http de Go) aux processus du namespace perf-lab
+# et expose des métriques Prometheus sur :9090/metrics.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: beyla
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+  namespace: beyla
+---
+# Lecture des métadonnées Kubernetes pour enrichir les métriques
+# (service_name, k8s_namespace_name, k8s_pod_name...).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla
+rules:
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments", "daemonsets", "statefulsets"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "nodes"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: beyla
+subjects:
+  - kind: ServiceAccount
+    name: beyla
+    namespace: beyla
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: beyla
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+  namespace: beyla
+data:
+  beyla-config.yml: |
+    log_level: info
+    # Instrumenter uniquement les processus du namespace perf-lab.
+    discovery:
+      instrument:
+        - k8s_namespace: perf-lab
+    attributes:
+      kubernetes:
+        enable: true
+    routes:
+      patterns: [/order, /price]
+      unmatched: heuristic
+      # Ne pas compter les sondes readiness du kubelet.
+      ignored_patterns: [/healthz]
+      ignore_mode: all
+    prometheus_export:
+      port: 9090
+      path: /metrics
+      features: [application]
+      # Buckets fins pour des percentiles précis entre 5 ms et 10 s.
+      buckets:
+        duration_histogram: [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.65, 0.7, 0.8, 1, 1.5, 2, 3, 5, 10]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  namespace: beyla
+  labels: {app: beyla}
+spec:
+  selector:
+    matchLabels: {app: beyla}
+  template:
+    metadata:
+      labels: {app: beyla}
+    spec:
+      serviceAccountName: beyla
+      hostPID: true            # voir les processus des autres pods du noeud
+      containers:
+        - name: beyla
+          image: grafana/beyla:3.41.0
+          env:
+            - {name: BEYLA_CONFIG_PATH, value: /config/beyla-config.yml}
+          ports:
+            - {name: metrics, containerPort: 9090}
+          securityContext:
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+              add:
+                - BPF                 # charger les programmes eBPF
+                - SYS_PTRACE          # inspecter /proc et poser des uprobes
+                - NET_ADMIN           # sondes réseau / traffic control
+                - NET_RAW
+                - PERFMON             # kprobes / perf events
+                - CHECKPOINT_RESTORE
+                - DAC_READ_SEARCH
+                - SYS_RESOURCE
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+      volumes:
+        - name: config
+          configMap: {name: beyla-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beyla
+  namespace: beyla
+  labels: {app: beyla}
+spec:
+  selector: {app: beyla}
+  ports:
+    - {name: metrics, port: 9090, targetPort: metrics}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: beyla
+  namespace: beyla
+spec:
+  selector:
+    matchLabels: {app: beyla}
+  endpoints:
+    - port: metrics
+      interval: 5s
+      metricRelabelings:
+        # Exposer le namespace des services instrumentés dans le label
+        # "namespace" (sinon il vaudrait "beyla", celui du pod Beyla).
+        - sourceLabels: [k8s_namespace_name]
+          regex: (.+)
+          targetLabel: namespace

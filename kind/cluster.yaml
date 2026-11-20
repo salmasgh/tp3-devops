@@ -1,0 +1,12 @@
+# Cluster kind mono-noeud pour le TP3.
+# Les NodePort de Grafana (30300) et Prometheus (30090) sont publiés sur l'hôte.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: perf-lab
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30300   # Grafana
+        hostPort: 30300
+      - containerPort: 30090   # Prometheus
+        hostPort: 30090

@@ -1,0 +1,11 @@
+# Partie 4 - Scénario 1 : 95 % des requêtes en 15 ms, 5 % en 600 ms.
+spec:
+  template:
+    spec:
+      containers:
+        - name: pricing-engine
+          env:
+            - {name: BASE_LATENCY_MS, value: "15"}
+            - {name: SLOW_RATIO, value: "0.05"}
+            - {name: SLOW_LATENCY_MS, value: "600"}
+            - {name: ERROR_RATE, value: "0"}
